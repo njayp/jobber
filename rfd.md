@@ -36,40 +36,46 @@ The manager runs jobs, stops jobs, and gets the status of jobs. The `user`, `nam
 The manager uses cgroups v2. To keep its environment consistent, testing and running is done in an alpine container.
 
 #### CGroups
+
+Before controllers can be added to the cgroups hierarchy, the init process must be moved to a leaf cgroup [(docs)](https://www.kernel.org/doc/html/latest/admin-guide/cgroup-v2.html#no-internal-process-constraint). Because `jobber` is the init process, it moves itself by making a new folder `cgroups/jobber`, then writing `1` to `cgroups/jobber/cgroup.procs`.
+
 ```
-            ┌───────┐
-            │cgroups│
-            └┬────┬─┘
-             │    │
-             │    │
-            ┌┴────┴─┐
-            │jobber │
-            └┬────┬─┘
+                 ┌───────┐
+                 │cgroups│
+                 └┬────┬─┘
+                  │    │
+                  │    │
+            ┌─────┴─┐ ┌┴─────┐
+            │ jobs  │ │jobber│
+            └┬────┬─┘ └──────┘
              │    │
              │    │
  ┌-──────────┴─┐ ┌┴────────────┐
- │    user     │ │    user     │
+ │   <user>    │ │   <user>    │
  └┬────────────┘ └┬───────────┬┘
   │               │           │
   │               │           │
  ┌┴────────┐    ┌─┴───────┐  ┌┴────────┐
- │   job   │    │   job   │  │   job   │
+ │  <job>  │    │  <job>  │  │  <job>  │
  └─────────┘    └─────────┘  └─────────┘
 ```
 
-This cgroups hierarchy provides fine-grained control at all levels. For example, setting limits at the jobber level prevents the sum of all processes from overwhelming the machine. Before starting a job, the manager creates a child cgroup at the process level.  If a job specifies resource limits, the limits are set in the cgroup before the process is attached. The manager can set the following limits:
+This cgroups hierarchy provides fine-grained control at all levels. For example, setting limits at the jobber level prevents the sum of all processes from overwhelming the machine. To enable the necessary controllers in all cgroups, `+cpu +memory +io +pids` is written to `cgroup.subtree_control` in all non-leaf cgroups starting from the root. Before starting a job, the manager creates a child cgroup of the appropriate user cgroup, and sets the following limits by writing the limit to the corresponding file. Setting a maximum process number of processes prevents fork bomb attacks.
 
-* CPU percentage usage maximum (%)
-* Memory usage maximum (MB)
-* IO read and write maximums (MB/s)
+| limit | file | data |
+|-|-|-|
+| maximum percentage usage of one cpu core (10%) | cpu.max | 10000 100000 | 
+| memory usage maximum (10M) | memory.max | 10M |
+| io read and write maximums (1MB/s) | io.max | 1:0 wbps=1048576 rbps=1048576 |
+| maximum number of processes (100) | pids.max | 100 |
 
-The manager can attach a process to a cgroup by adding its pid to `cgroup.procs`. Once a job is running, the manager can use cgroups to kill it by writing `1` to `cgroup.kill`. The manager can get the status of a job by reading `cgroup.procs`; the presence or absence of pids conveys whether the job is running or has exited.
+The manager can kill all processes in a cgroup by writing `1` to `cgroup.kill`. The manager can get the status of a job by reading `cgroup.procs`; the presence or absence of pids conveys whether the job is running or has exited.
 
 #### Process
 
-In order to protect the system files from jobs, job processes are run as a linux user. For this iteration, the only valid user is `nobody`, but this could be expanded in the future for security and convenience. This is accomplished by modifying processes before they are started using `syscall.SysProcAttr`.
+In order to protect the system files from jobs, job processes are run as a linux user. This is accomplished by modifying processes before they are started using `syscall.SysProcAttr`. For this iteration, the only valid user is `nobody`, but this could be expanded in the future for security and convenience.
 
-Once the appropriate cgroup is created, the process is started and attached to the cgroup. The process is killed if the attach fails. The output of the process is stored in a file at `/tmp/jobber/<user>/<job>/out.txt`.
+To start a process in the appropriate cgroup, `jobber` will move itself to that cgroup by writing `1` to `cgroups/jobs/<user>/<job>/cgroup.procs`. Then, `jobber` will start the process, and the process will automatically be added to the target cgroup. Finally, `jobber` will move itself back to `cgroups/jobber`. The stdout of the process is stored in a file at `/tmp/jobber/<user>/<job>/out.txt`, and the stderr at `/tmp/jobber/<user>/<job>/err.txt`.
 
 ### API
 
@@ -202,15 +208,11 @@ Starts a job and prints the generated job name
 | flag | description | 
 |------|-------------|
 |`-s, --stream`|also streams the job's output|
-| `--cpu-max uint64`|sets maximum percentage of CPU cycle ([1-100]%)|
-|`--mem-max uint64`|sets maximum memory usage (MB)|
-|`--read-max uint64`|sets maximum disk read speed (MB/s)|
-|`--write-max uint64`|sets maximum disk write speed (MB/s)|
 
 If the `--stream` flag is enabled, the start command will call the `Start` rpc followed by the `Stream` rpc. The user is able to easily run short-running jobs like `start -s ls` that will immediately produce the output the user wants.
 
 #### Stop
-Stops a job via SIGKILL
+Stops a job using cgroups, which will send a SIGKILL
 
 `stop [flags] <name>`
 
