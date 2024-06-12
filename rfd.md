@@ -127,10 +127,6 @@ Each user has an assigned role. If a user tries to call an rpc that its role doe
 #### Proto
 
 ```proto
-syntax = "proto3";
-package pb;
-option go_package = "./pb";
-
 service Jobber {
     // Start throws error if process does not start.
     rpc Start(StartRequest) returns (StartResponse);
@@ -171,8 +167,7 @@ message StatusResponse {
 
 message StreamRequest {
     string id = 1;
-    // Name of file in /tmp/<jobber>/<user>/<id>/
-    string filename = 2;
+    FileIndicator fileIndicator = 2;
 }
 
 message StreamResponse {
@@ -183,8 +178,15 @@ message StreamResponse {
 
 // If State is unknown, the rpc throws error
 enum State {
-    Running = 0;
-    Exited = 1;
+    State_Unspecified = 0;
+    Running = 1;
+    Exited = 2;
+}
+
+enum FileIndicator {
+    FileIndicator_Unspecified = 0;
+    OutTxt = 1;
+    ErrTxt = 2;
 }
 ```
 
