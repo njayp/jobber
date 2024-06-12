@@ -193,7 +193,7 @@ The only race condition/collision occurs if two clients create a job with the sa
 func CopyFollow(ctx context.Context, filepath string, w io.Writer) error
 ```
 
-`CopyFollow` uses `io.Copy` to read from file `/tmp/jobber/<user>/<job>/out.txt` to `w`. When EOF is reached, the function will backoff (sleep), and periodically check the modification time of the file. If the file has been modified, `io.Copy` is run again with the same reader, so that file offset is retained. This continues until `ctx` is cancelled.
+`CopyFollow` uses `io.Copy` to read from file `/tmp/jobber/<user>/<job>/out.txt` to `w`. When EOF is reached, the function will watch the file with `syscall.InotifyAddWatch`. Once the watcher sends a `syscall.IN_MODIFY` event, `io.Copy` is run again with the same reader, so that file offset is retained. This continues until `ctx` is cancelled.
 
 ```go
 type StreamWriter struct {
@@ -260,7 +260,6 @@ To ensure that all the components play together nicely, an integration test star
 
 * input validation/sanitization
 * automatically stop output streams when the job exits
-* use something like `fsnotify` to watch output files
 * have a linux user for each authn user, for resource limits and usage
 * ability to delete jobs
 * job isolation
