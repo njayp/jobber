@@ -219,20 +219,10 @@ Starts a job and prints the generated job id
 
 `start [flags] <cmd> [<cmd args...>]`
 
-| flag | description | 
-|------|-------------|
-|`-s, --stream`|also streams the job's output|
-
-If the `--stream` flag is enabled, the start command will call the `Start` rpc followed by the `Stream` rpc. The user is able to easily run short-running jobs like `start -s ls` that will immediately produce the output the user wants.
-
 #### Stop
 Stops a job via cgroups, which will send a SIGKILL
 
 `stop [flags] <job id>`
-
-| flag | description | 
-|------|-------------|
-|`-s, --stream`|also streams the job's output|
 
 #### Status
 Prints the status of a job
