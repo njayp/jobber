@@ -81,9 +81,9 @@ To start a process in the appropriate cgroup, `jobber` will move itself to that 
 
 The job runner is meant to run in a remote linux machine, so it has an accompanying client. The client sends commands over gRPC.
 
-#### Authorization
+#### Authentication
 
-The server and client authorize each other's certificates (mTLS). For this iteration, the CAs and certs are pre-generated. Below is the server and client tls configuration.
+The server and client authorize each other's certificates (mTLS). For this iteration, the CAs and certs are pre-generated. The client certificate functions as the client secret. Below is the server and client tls configuration. 
 
 ```go
     // Server
@@ -111,9 +111,18 @@ The server and client authorize each other's certificates (mTLS). For this itera
     }
 ```
 
-#### Authentication
+#### Authorization
 
-Both a `UnaryInterceptor` and a `StreamInterceptor` are added to the server. These interceptors both extract the peer certificates from the context. If a certificate's subject contains a matching token, the request is authenticated.
+Both a `UnaryInterceptor` and a `StreamInterceptor` are added to the server. These interceptors both extract the peer certificates from the context. They use the `Subject Alternate Name`, `EmailAddresses`, to identify the user.
+
+There are two hard-coded roles.
+
+| role | permissions |
+| - | - |
+| writer | start, stop, status, stream |
+| reader | status, stream |
+
+Each user has an assigned role. If a request from a user tries to call an rpc that its role does not have permission to call, the request is rejected. For this iteration, there are two hard-coded users, `reader-user` and `writer-user`.
 
 #### Proto
 
