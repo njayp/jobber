@@ -13,7 +13,6 @@ state: draft
 
 Implement a prototype job worker service that provides an API to run arbitrary Linux commands according to this [challenge document](https://github.com/gravitational/careers/blob/main/challenges/systems/challenge-1.md).
 
-
 ## Why
 
 This is a coding challenge designed to test mastery in several skill areas.
@@ -34,6 +33,13 @@ The manager runs jobs, stops jobs, and gets the status of jobs. The `user`, `id`
 #### Environment
 
 The manager uses cgroups v2. To keep its environment consistent, testing and running is done in an alpine container.
+
+#### Binary
+
+usage | description | notes |
+|-|-|-|
+|`serve [flags]`|main command, starts the manager|
+|`start [flags] <cmd> [<cmd args...>]`|starts a child process in a target cgroup | started as a child process by the manager. target cgroup is specified with flags
 
 #### CGroups
 
@@ -75,7 +81,7 @@ The manager can kill all processes in a cgroup by writing `1` to `cgroup.kill`. 
 
 In order to protect the system files from jobs, job processes are run as a linux user. This is accomplished by modifying processes before they are started using `syscall.SysProcAttr`. For this iteration, the only valid user is `nobody`, but this could be expanded in the future for security and convenience.
 
-To start a process in the appropriate cgroup, `jobber` will move itself to that cgroup by writing `1` to `cgroups/jobs/<user>/<job>/cgroup.procs`. Then, `jobber` will start the process, and the process will automatically be added to the target cgroup. Finally, `jobber` will move itself back to `cgroups/jobber`. The stdout of the process is stored in a file at `/tmp/jobber/<user>/<job>/out.txt`, and the stderr at `/tmp/jobber/<user>/<job>/err.txt`.
+To start a process in the appropriate cgroup, `jobber` will call itself with the subcommand `start`. This child process moves itself to the target cgroup and starts the job process so that the job process is automatically added to the target cgroup. The stdout of the job process is stored in a file at `/tmp/jobber/<user>/<job>/out.txt`, and the stderr at `/tmp/jobber/<user>/<job>/err.txt`. The server monitors the stderr of its child process for errors.
 
 ### API
 
@@ -216,12 +222,12 @@ func (s *StreamWriter) Write(p []byte) (int, error)
 
 The client uses `cobra` client framework. There are four subcommands:
 
-| command | usage | description | notes |
-|-|-|-|-|
-|Start|`start [flags] <cmd> [<cmd args...>]`|Starts a job and prints the generated job id|Throws error if the command fails to start
-|Stop|`stop [flags] <job id>`|Stops a job via cgroups, which will send a SIGKILL|
-|Status|`status [flags] <job id>`|Prints the status of a job|
-|Stream|`stream [flags] <job id>`|Streams stdout and stderr of a job|Stream calls the Stream rpc twice, once for `stdout`, and once for `stderr`.
+| usage | description | notes |
+|-|-|-|
+|`start [flags] <cmd> [<cmd args...>]`|Starts a job and prints the generated job id|Throws error if the command fails to start
+|`stop [flags] <job id>`|Stops a job via cgroups, which will send a SIGKILL|
+|`status [flags] <job id>`|Prints the status of a job|
+|`stream [flags] <job id>`|Streams stdout and stderr of a job|Stream calls the Stream rpc twice, once for `stdout`, and once for `stderr`.
 
 ### Testing Plan
 
