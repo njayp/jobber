@@ -122,47 +122,57 @@ There are two hard-coded roles.
 | writer | start, stop, status, stream |
 | reader | status, stream |
 
-Each user has an assigned role. If a request from a user tries to call an rpc that its role does not have permission to call, the request is rejected. For this iteration, there are two hard-coded users, `reader-user` and `writer-user`.
+Each user has an assigned role. If a user tries to call an rpc that its role does not have permission to call, the request is rejected. For this iteration, there are two hard-coded users, `reader-user` and `writer-user`.
 
 #### Proto
 
 ```proto
+syntax = "proto3";
+package pb;
+option go_package = "./pb";
+
 service Jobber {
+    // Start throws error if process does not start.
     rpc Start(StartRequest) returns (StartResponse);
+    // Stop does not wait for the cgroup to exit. Status should be used 
+    // to check whether a process has exited.
     rpc Stop(StopRequest) returns (StopResponse);
+    // IDEA watching functionality should be added to this rpc.
     rpc Status(StatusRequest) returns (StatusResponse);
+    // Stream copies and follows one file for finer-grained control. 
+    // It is currently called twice, once for "out.txt", and once for "err.txt". 
+    // Reusing the same client will reuse the same connection for both calls. 
     rpc Stream(StreamRequest) returns (stream StreamResponse);
 }
 
 message StartRequest {
-    Limits limits = 1;
-    
     // used in exec.Cmd
-    string cmd = 2;
-    repeated string args = 3;
+    string cmd = 1;
+    repeated string args = 2;
 }
 
 message StartResponse {
-    string name = 1;
+    string id = 1;
 }
 
 message StopRequest {
-    string name = 1;
+    string id = 1;
 }
 
 message StopResponse {}
 
 message StatusRequest {
-    string name = 1;
+    string id = 1;
 }
 
 message StatusResponse {
-    // type manager.Status
-    int64 status = 1;
+    State state = 1;
 }
 
 message StreamRequest {
-    string name = 1;
+    string id = 1;
+    // Name of file in /tmp/<jobber>/<user>/<id>/
+    string filename = 2;
 }
 
 message StreamResponse {
@@ -171,15 +181,10 @@ message StreamResponse {
 
 ////
 
-message Limits {
-    // Percentage of CPU cycle [1-100]
-    int64 cpuMax = 1; 
-    // MB
-    int64 memMax = 2; 
-    // MB per second
-    int64 readMax = 3; 
-    // MB per second
-    int64 writeMax = 4; 
+// If State is unknown, the rpc throws error
+enum State {
+    Running = 0;
+    Exited = 1;
 }
 ```
 
@@ -193,7 +198,7 @@ The only race condition/collision occurs if two clients create a job with the sa
 func CopyFollow(ctx context.Context, filepath string, w io.Writer) error
 ```
 
-`CopyFollow` uses `io.Copy` to read from file `/tmp/jobber/<user>/<job>/out.txt` to `w`. When EOF is reached, the function will watch the file with `syscall.InotifyAddWatch`. Once the watcher sends a `syscall.IN_MODIFY` event, `io.Copy` is run again with the same reader, so that file offset is retained. This continues until `ctx` is cancelled.
+`CopyFollow` uses `io.Copy` to read from file `/tmp/jobber/<user>/<job>/<filepath>` to `w`. When EOF is reached, the function will watch the file with `syscall.InotifyAddWatch`. Once the watcher sends a `syscall.IN_MODIFY` event, `io.Copy` is run again with the same reader, so that file offset is retained. This continues until `ctx` is cancelled.
 
 ```go
 type StreamWriter struct {
@@ -221,7 +226,7 @@ Starts a job and prints the generated job id
 If the `--stream` flag is enabled, the start command will call the `Start` rpc followed by the `Stream` rpc. The user is able to easily run short-running jobs like `start -s ls` that will immediately produce the output the user wants.
 
 #### Stop
-Stops a job using cgroups, which will send a SIGKILL
+Stops a job via cgroups, which will send a SIGKILL
 
 `stop [flags] <job id>`
 
@@ -235,7 +240,7 @@ Prints the status of a job
 `status [flags] <job id>`
 
 #### Stream
-Streams the output of a job
+Streams stdout and stderr of a job
 
 `stream [flags] <job id>`
 
@@ -258,6 +263,7 @@ To ensure that all the components play together nicely, an integration test star
 
 ### Future Considerations
 
+* add watch to Status rpc
 * input validation/sanitization
 * automatically stop output streams when the job exits
 * have a linux user for each authn user, for resource limits and usage
