@@ -214,27 +214,12 @@ func (s *StreamWriter) Write(p []byte) (int, error)
 
 The client uses `cobra` client framework. There are four subcommands:
 
-#### Start
-Starts a job and prints the generated job id
-
-`start [flags] <cmd> [<cmd args...>]`
-
-#### Stop
-Stops a job via cgroups, which will send a SIGKILL
-
-`stop [flags] <job id>`
-
-#### Status
-Prints the status of a job
-
-`status [flags] <job id>`
-
-#### Stream
-Streams stdout and stderr of a job
-
-`stream [flags] <job id>`
-
-Stream calls the Stream rpc twice, once for `stdout`, and once for `stderr`.
+| command | usage | description | notes |
+|-|-|-|-|
+|Start|`start [flags] <cmd> [<cmd args...>]`|Starts a job and prints the generated job id|Throws error if the command fails to start
+|Stop|`stop [flags] <job id>`|Stops a job via cgroups, which will send a SIGKILL|
+|Status|`status [flags] <job id>`|Prints the status of a job|
+|Stream|`stream [flags] <job id>`|Streams stdout and stderr of a job|Stream calls the Stream rpc twice, once for `stdout`, and once for `stderr`.
 
 ### Testing Plan
 
