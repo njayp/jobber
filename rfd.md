@@ -38,8 +38,8 @@ The manager uses cgroups v2. To keep its environment consistent, testing and run
 
 usage | description | notes |
 |-|-|-|
-|`serve [flags]`|main command, starts the manager|
-|`start [flags] <cmd> [<cmd args...>]`|starts a child process in a target cgroup | started as a child process by the manager. target cgroup is specified with flags
+|`start [flags]`|main command, starts the manager|
+|`spawn [flags] <cmd> [<cmd args...>]`|starts a child process in a target cgroup | started as a child process by the manager. target cgroup is specified with flags
 
 #### CGroups
 
@@ -75,13 +75,13 @@ This cgroups hierarchy provides fine-grained control at all levels. For example,
 | io read and write maximums (1MB/s) | io.max | 1:0 wbps=1048576 rbps=1048576 |
 | maximum number of processes (100) | pids.max | 100 |
 
-The manager can kill all processes in a cgroup by writing `1` to `cgroup.kill`. The manager can get the status of a job by reading `cgroup.procs`; the presence or absence of pids conveys whether the job is running or has exited.
+The manager can kill all processes in a cgroup by writing `1` to `cgroup.freeze`. The manager can get the status of a job by reading `cgroup.events`; `populated` shows whether there are processes running, and `frozen` shows whether those processes are frozen.
 
 #### Process
 
 In order to protect the system files from jobs, job processes are run as a linux user. This is accomplished by modifying processes before they are started using `syscall.SysProcAttr`. For this iteration, the only valid user is `nobody`, but this could be expanded in the future for security and convenience.
 
-To start a process in the appropriate cgroup, `jobber` will call itself with the subcommand `start`. This child process moves itself to the target cgroup and starts the job process so that the job process is automatically added to the target cgroup. The stdout of the job process is stored in a file at `/tmp/jobber/<user>/<job>/out.txt`, and the stderr at `/tmp/jobber/<user>/<job>/err.txt`. The server monitors the stderr of its child process for errors.
+To start a process in the appropriate cgroup, `jobber` will call itself with the subcommand `spawn`. This child process moves itself to the target cgroup and starts the job process so that the job process is automatically added to the target cgroup. The stdout of the job process is stored in a file at `/tmp/jobber/<user>/<job>/out.txt`, and the stderr at `/tmp/jobber/<user>/<job>/err.txt`. The server monitors the stderr of its child process for errors.
 
 ### API
 
@@ -173,7 +173,7 @@ message StatusResponse {
 
 message StreamRequest {
     string id = 1;
-    FileIndicator fileIndicator = 2;
+    StreamIndicator streamIndicator = 2;
 }
 
 message StreamResponse {
@@ -187,12 +187,13 @@ enum State {
     State_Unspecified = 0;
     Running = 1;
     Exited = 2;
+    Frozen = 3;
 }
 
-enum FileIndicator {
-    FileIndicator_Unspecified = 0;
-    OutTxt = 1;
-    ErrTxt = 2;
+enum StreamIndicator {
+    StreamIndicator_Unspecified = 0;
+    StdOut = 1;
+    StdErr = 2;
 }
 ```
 
