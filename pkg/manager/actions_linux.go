@@ -13,7 +13,7 @@ import (
 	"github.com/njayp/jobber/pkg/pb"
 )
 
-// Start calls Spawn in a new process
+// Start calls Spawn in a new process. It does not wait for the process to start.
 func Start(req *pb.StartRequest) (*pb.StartResponse, error) {
 	exe, err := os.Executable()
 	if err != nil {
@@ -23,6 +23,7 @@ func Start(req *pb.StartRequest) (*pb.StartResponse, error) {
 	id := uuid.NewString()
 	args := append([]string{"spawn", id}, req.CmdString...)
 
+	// TODO maybe get process start errors from stderr
 	go func() {
 		// wait for Spawn to complete, and log err
 		err = exec.Command(exe, args...).Run()
@@ -34,7 +35,7 @@ func Start(req *pb.StartRequest) (*pb.StartResponse, error) {
 	return &pb.StartResponse{Id: id}, nil
 }
 
-// Stop kills job with id
+// Stop kills job with id. It does not wait for the job to exit.
 func Stop(req *pb.StopRequest) (*pb.StopResponse, error) {
 	path := filepath.Join(userCGPath, req.Id)
 	cg, err := cgroups.LoadCGroup(path)
@@ -78,7 +79,7 @@ func Status(req *pb.StatusRequest) (*pb.StatusResponse, error) {
 	return &pb.StatusResponse{State: state}, nil
 }
 
-// Stream streams "stdout.txt" or "stderr.txt"
+// Stream streams "stdout.txt" or "stderr.txt" until ctx is cancelled
 func Stream(ctx context.Context, req *pb.StreamRequest, w io.Writer) error {
 	path := outFilePath(req.Id, req.StreamSelect)
 	return copyFollow(ctx, path, w)

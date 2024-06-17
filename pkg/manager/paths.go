@@ -18,6 +18,9 @@ const (
 var jobberCGPath = filepath.Join(rootPath, jobberName)
 var userCGPath = filepath.Join(rootPath, parentName, userName)
 
+// outFilePath returns the filepath to the selected file within
+// the tmp dir. Since these files are streamed, pb.StreamSelect
+// is used as the file selector
 func outFilePath(id string, si pb.StreamSelect) string {
 	var filename string
 	switch si {

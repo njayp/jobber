@@ -5,7 +5,8 @@ import (
 )
 
 // InitCGroups must be called only once before any other
-// actions are called
+// actions are called. It sets up the cgroup tree
+// so that jobs can be added as children of the user node.
 func InitCGroups() error {
 	root, err := cgroups.LoadCGroup(rootPath)
 	if err != nil {
