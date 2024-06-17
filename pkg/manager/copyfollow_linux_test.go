@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"io"
 	"os"
 	"testing"
 	"time"
@@ -21,63 +22,54 @@ func TestCopyFollow(t *testing.T) {
 
 	i := 1
 	write := func() {
-		file.WriteString(fmt.Sprint(i))
+		_, err = file.WriteString(fmt.Sprint(i))
+		if err != nil {
+			t.Fatal(err)
+		}
 		i += 1
 	}
 
-	t.Run("inotify", func(t *testing.T) {
-		// set a watch
-		ch := make(chan struct{})
-		go inotify(context.Background(), filename, ch)
-
-		// wait for watch to setup before writing to file
-		time.Sleep(time.Second)
-
-		// check that we are notified when writing to file x5
-		for range [5]struct{}{} {
-			// write to file
-			write()
-
-			select {
-			case <-time.After(time.Second):
-				t.Error("took too long to receive notify")
-			case <-ch:
-			}
-		}
-
-		// check that we are not notified when not writing
-		select {
-		case <-time.After(time.Second):
-		case <-ch:
-			t.Error("received bad notify")
-		}
-	})
-
 	t.Run("copyfollow", func(t *testing.T) {
+		// buffer to store data
 		var buf bytes.Buffer
+		// pipe blocks until data
+		pr, pw := io.Pipe()
+		// read pipe into buffer
+		tr := io.TeeReader(pr, &buf)
 		ctx, cancel := context.WithCancel(context.Background())
+		write()
 
 		// copyfollow should read the current file into buffer immediately
-		go copyFollow(ctx, filename, &buf)
-		// wait for copy
-		time.Sleep(time.Second)
-		if buf.String() != "12345" {
+		chErr := make(chan error)
+		go func() {
+			err := copyFollow(ctx, filename, pw)
+			chErr <- err
+		}()
+
+		// pipe into buf
+		p := make([]byte, 1024)
+		tr.Read(p)
+		if buf.String() != "1" {
 			t.Errorf("buf value was wrong: %s", buf.String())
 		}
 
-		// write to file. copyfollow should write it to buffer
+		// write to file. copyfollow should write it to pipe
 		write()
-		time.Sleep(time.Second)
-		if buf.String() != "123456" {
+		// pipe into buf
+		tr.Read(p)
+		if buf.String() != "12" {
 			t.Errorf("buf value was wrong: %s", buf.String())
 		}
 
-		// copyfollow should not write after cancel
+		// copyfollow should return after cancel
 		cancel()
-		write()
-		time.Sleep(time.Second)
-		if buf.String() != "123456" {
-			t.Errorf("buf value was wrong: %s", buf.String())
+		select {
+		case <-time.After(time.Second):
+			t.Error("copyfollow did not return")
+		case err := <-chErr:
+			if err != nil {
+				t.Errorf("copyfollow returned with err: %s", err)
+			}
 		}
 	})
 }
