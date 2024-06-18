@@ -19,7 +19,7 @@ func copyFollow(ctx context.Context, path string, w io.Writer) error {
 	}
 	defer file.Close()
 
-	// make watcher that will signal when file is modified
+	// make watcher
 	inotifyFd, err := syscall.InotifyInit()
 	if err != nil {
 		return fmt.Errorf("initializing inotify: %w\n", err)
@@ -86,6 +86,7 @@ func copyFollow(ctx context.Context, path string, w io.Writer) error {
 						return nil
 					}
 				case syscall.IN_MODIFY:
+					// file was modified
 					if name == filepath.Base(path) {
 						// read file into writer
 						_, err = io.Copy(w, file)
