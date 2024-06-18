@@ -28,8 +28,9 @@ func TestCopyFollow(t *testing.T) {
 		}
 		i += 1
 	}
+	write()
 
-	t.Run("copyfollow", func(t *testing.T) {
+	t.Run("copyfollow with ctx cancel", func(t *testing.T) {
 		// buffer to store data
 		var buf bytes.Buffer
 		// pipe blocks until data
@@ -37,13 +38,11 @@ func TestCopyFollow(t *testing.T) {
 		// read pipe into buffer
 		tr := io.TeeReader(pr, &buf)
 		ctx, cancel := context.WithCancel(context.Background())
-		write()
 
 		// copyfollow should read the current file into buffer immediately
 		chErr := make(chan error)
 		go func() {
-			err := copyFollow(ctx, filename, pw)
-			chErr <- err
+			chErr <- copyFollow(ctx, filename, pw)
 		}()
 
 		// pipe into buf
@@ -63,6 +62,45 @@ func TestCopyFollow(t *testing.T) {
 
 		// copyfollow should return after cancel
 		cancel()
+		select {
+		case <-time.After(time.Second):
+			t.Error("copyfollow did not return")
+		case err := <-chErr:
+			if err != nil {
+				t.Errorf("copyfollow returned with err: %s", err)
+			}
+		}
+	})
+
+	t.Run("copyfollow with process exit", func(t *testing.T) {
+		// buffer to store data
+		var buf bytes.Buffer
+		// pipe blocks until data
+		pr, pw := io.Pipe()
+		// read pipe into buffer
+		tr := io.TeeReader(pr, &buf)
+
+		// copyfollow should read the current file into buffer immediately
+		chErr := make(chan error)
+		go func() {
+			chErr <- copyFollow(context.Background(), filename, pw)
+		}()
+
+		// pipe into buf
+		p := make([]byte, 1024)
+		tr.Read(p)
+		if buf.String() != "12" {
+			t.Errorf("buf value was wrong: %s", buf.String())
+		}
+
+		// create exitcode file like process was stopped
+		file, err := os.Create(exitCodeFileName)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer file.Close()
+
+		// copyfollow should return after exitcode file appears
 		select {
 		case <-time.After(time.Second):
 			t.Error("copyfollow did not return")

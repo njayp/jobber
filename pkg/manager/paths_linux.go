@@ -9,10 +9,11 @@ import (
 )
 
 const (
-	rootPath   = "/sys/fs/cgroup"
-	jobberName = "jobber"
-	parentName = "jobs"
-	userName   = "nobody"
+	rootPath         = "/sys/fs/cgroup"
+	jobberName       = "jobber"
+	parentName       = "jobs"
+	userName         = "nobody"
+	exitCodeFileName = "exitcode.txt"
 )
 
 var jobberCGPath = filepath.Join(rootPath, jobberName)
@@ -30,7 +31,7 @@ func outFilePath(id string, si pb.StreamSelect) string {
 		filename = "stderr.txt"
 	// negative numbers for files not exposed in proto
 	case -1:
-		filename = "exitcode.txt"
+		filename = exitCodeFileName
 	default:
 		filename = "unspecified"
 	}

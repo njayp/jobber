@@ -4,29 +4,31 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"log"
 	"os"
+	"path/filepath"
 	"syscall"
 	"unsafe"
 )
 
-func copyFollow(ctx context.Context, filepath string, w io.Writer) error {
+func copyFollow(ctx context.Context, path string, w io.Writer) error {
 	// Open the file
-	file, err := os.Open(filepath)
+	file, err := os.Open(path)
 	if err != nil {
 		return err
 	}
 	defer file.Close()
 
 	// make watcher that will signal when file is modified
-	// Create an inotify instance
 	inotifyFd, err := syscall.InotifyInit()
 	if err != nil {
 		return fmt.Errorf("initializing inotify: %w\n", err)
 	}
 	defer syscall.Close(inotifyFd)
 
-	// Add a watch for the file
-	watchFd, err := syscall.InotifyAddWatch(inotifyFd, filepath, syscall.IN_MODIFY)
+	// Add a watch for the dir
+	dir := filepath.Dir(path)
+	watchFd, err := syscall.InotifyAddWatch(inotifyFd, dir, syscall.IN_MODIFY|syscall.IN_CREATE)
 	if err != nil {
 		return fmt.Errorf("adding watch: %w\n", err)
 	}
@@ -43,34 +45,61 @@ func copyFollow(ctx context.Context, filepath string, w io.Writer) error {
 		return err
 	}
 
+	// if exitcode file is present, we can return here
+	_, err = os.Stat(filepath.Join(dir, exitCodeFileName))
+	if !os.IsNotExist(err) {
+		if err != nil {
+			return err
+		}
+		// file exists
+		return nil
+	}
+
 	// Buffer to receive events
-	var buf [syscall.SizeofInotifyEvent * 10]byte
+	var buf [4096]byte
 
 	for {
 		select {
 		case <-ctx.Done():
 			return nil
 		default:
-			// Read events
+			// Iterate through the buffer and print event details
 			n, err := syscall.Read(inotifyFd, buf[:])
 			if err != nil {
-				return err
+				log.Fatal(err)
 			}
 
-			// Process each event
-			var offset uint32
-			for offset < uint32(n) {
-				event := (*syscall.InotifyEvent)(unsafe.Pointer(&buf[offset]))
-				// event can also be syscall.IN_DELETE or syscall.IN_ATTRIB
-				if event.Mask&syscall.IN_MODIFY == syscall.IN_MODIFY {
-					// read file into writer, then wait for next read
-					_, err = io.Copy(w, file)
-					if err != nil {
-						return err
-					}
-					break
+			// Iterate through the buffer and print event details
+			for i := 0; i < n; {
+				rawEvent := (*syscall.InotifyEvent)(unsafe.Pointer(&buf[i]))
+				nameLen := int(rawEvent.Len)
+				name := ""
+				if nameLen > 0 {
+					nameBytes := buf[i+syscall.SizeofInotifyEvent : i+syscall.SizeofInotifyEvent+nameLen]
+					name = string(nameBytes[:len(nameBytes)-1])
 				}
-				offset += syscall.SizeofInotifyEvent + event.Len
+
+				switch rawEvent.Mask {
+				case syscall.IN_CREATE:
+					// process has exited, return
+					if name == exitCodeFileName {
+						return nil
+					}
+				case syscall.IN_MODIFY:
+					if name == filepath.Base(path) {
+						// read file into writer
+						_, err = io.Copy(w, file)
+						if err != nil {
+							return err
+						}
+						// we can't break here, we might throw
+						// away syscall.IN_CREATE
+					}
+				default:
+					fmt.Printf("Event %x on file %s\n", rawEvent.Mask, name)
+				}
+
+				i += syscall.SizeofInotifyEvent + nameLen
 			}
 		}
 	}
