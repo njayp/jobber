@@ -59,6 +59,8 @@ func Spawn(id, exe string, args ...string) error {
 	if err != nil {
 		return err
 	}
+	// cleanup job
+	defer cg.Kill()
 
 	// move self back to safe cgroup
 	jcg, err := cgroups.LoadCGroup(jobberCGPath)
@@ -72,10 +74,11 @@ func Spawn(id, exe string, args ...string) error {
 
 	// wait for cmd to exit so that we can log exit code
 	err = cmd.Wait()
+
+	// log exit code
 	if err != nil {
 		if exitError, ok := err.(*exec.ExitError); ok {
-			exitCode := exitError.ExitCode()
-			return logExitCode(id, exitCode)
+			return logExitCode(id, exitError.ExitCode())
 		}
 		return err
 	}
