@@ -13,6 +13,7 @@ service Jobber {
     // Stream copies and follows one file for neatness and control. 
     // StreamSelect selects between "stdout.txt" and "stderr.txt". 
     rpc Stream(StreamRequest) returns (stream StreamResponse);
+    rpc Version(VersionRequest) returns (VersionResponse);
 }
 
 message StartRequest {
@@ -45,6 +46,12 @@ message StreamRequest {
 
 message StreamResponse {
     bytes data = 1;
+}
+
+message VersionRequest {}
+
+message VersionResponse {
+    string version = 1;
 }
 
 ////

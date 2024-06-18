@@ -1,13 +1,25 @@
 package manager
 
-import (
-	"github.com/njayp/jobber/pkg/manager/cgroups"
-)
+import "github.com/njayp/jobber/pkg/manager/cgroups"
 
-// InitCGroups must be called only once before any other
-// actions are called. It sets up the cgroup tree
-// so that jobs can be added as children of the user node.
-func InitCGroups() error {
+// use NewManager to initialize
+type Manager struct{}
+
+// ensures that initCGroups is run
+func NewManager() (*Manager, error) {
+	err := initCGroups()
+	if err != nil {
+		return nil, err
+	}
+
+	return &Manager{}, nil
+}
+
+// initCGroups must be called before any other
+// actions are called. It can be called more than once.
+// It sets up the cgroup tree so that jobs can be added
+// as children of the user node.
+func initCGroups() error {
 	root, err := cgroups.LoadCGroup(rootPath)
 	if err != nil {
 		return err

@@ -15,10 +15,11 @@ import (
 )
 
 func TestManager(t *testing.T) {
+	// run init
+	m, err := NewManager()
+
 	// setup cgroup and check that init process has been moved
 	t.Run("init cgroups", func(t *testing.T) {
-		// run init
-		err := InitCGroups()
 		if err != nil {
 			// cancel other tests if init fails
 			t.Fatalf("failed to init gcroups: %s", err)
@@ -68,7 +69,7 @@ func TestManager(t *testing.T) {
 			t.Error("no pids in target cgroup")
 		}
 
-		t.Run("test limits", func(t *testing.T) {
+		t.Run("test cgroups tree and limits", func(t *testing.T) {
 			// assume cgroups works, so test whether limits were set
 			// check that pids.max has been set to 100
 			data, err := cg.ReadCGroupValue("pids.max")
@@ -94,7 +95,7 @@ func TestManager(t *testing.T) {
 			}
 
 			// test Status on a running process
-			resp, err := Status(&pb.StatusRequest{Id: id})
+			resp, err := m.Status(&pb.StatusRequest{Id: id})
 			if err != nil {
 				t.Errorf("failed to get Status: %s", err)
 			}
@@ -103,7 +104,7 @@ func TestManager(t *testing.T) {
 			}
 
 			// test Stop cgroup
-			_, err = Stop(&pb.StopRequest{Id: id})
+			_, err = m.Stop(&pb.StopRequest{Id: id})
 			if err != nil {
 				t.Errorf("failed to kill cgroup: %s", err)
 			}
@@ -111,7 +112,7 @@ func TestManager(t *testing.T) {
 			time.Sleep(time.Second)
 
 			// test Status on a killed process
-			resp, err = Status(&pb.StatusRequest{Id: id})
+			resp, err = m.Status(&pb.StatusRequest{Id: id})
 			if err != nil {
 				t.Errorf("failed to get Status: %s", err)
 			}
@@ -140,7 +141,7 @@ func TestManager(t *testing.T) {
 		time.Sleep(time.Second)
 
 		// test Status on a exited process
-		resp, err := Status(&pb.StatusRequest{Id: id})
+		resp, err := m.Status(&pb.StatusRequest{Id: id})
 		if err != nil {
 			t.Errorf("failed to get Status: %s", err)
 		}
@@ -151,7 +152,7 @@ func TestManager(t *testing.T) {
 		// test that process ran as user and failed to execute
 		var buf bytes.Buffer
 		// test stream stderr
-		go Stream(context.Background(), &pb.StreamRequest{Id: id, StreamSelect: pb.StreamSelect_Stderr}, &buf)
+		go m.Stream(context.Background(), &pb.StreamRequest{Id: id, StreamSelect: pb.StreamSelect_Stderr}, &buf)
 		// give time to io.Copy
 		time.Sleep(time.Second)
 		text := strings.TrimSpace(buf.String())

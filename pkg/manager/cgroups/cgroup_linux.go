@@ -16,7 +16,7 @@ func LoadCGroup(path string) (*CGroup, error) {
 	_, err := os.Stat(path)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return nil, fmt.Errorf("cgroup %s does not exist", path)
+			return nil, fmt.Errorf("cgroup does not exist: %w", err)
 		}
 		return nil, err
 	}

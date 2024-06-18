@@ -19,10 +19,11 @@ import (
 const _ = grpc.SupportPackageIsVersion7
 
 const (
-	Jobber_Start_FullMethodName  = "/pb.Jobber/Start"
-	Jobber_Stop_FullMethodName   = "/pb.Jobber/Stop"
-	Jobber_Status_FullMethodName = "/pb.Jobber/Status"
-	Jobber_Stream_FullMethodName = "/pb.Jobber/Stream"
+	Jobber_Start_FullMethodName   = "/pb.Jobber/Start"
+	Jobber_Stop_FullMethodName    = "/pb.Jobber/Stop"
+	Jobber_Status_FullMethodName  = "/pb.Jobber/Status"
+	Jobber_Stream_FullMethodName  = "/pb.Jobber/Stream"
+	Jobber_Version_FullMethodName = "/pb.Jobber/Version"
 )
 
 // JobberClient is the client API for Jobber service.
@@ -39,6 +40,7 @@ type JobberClient interface {
 	// Stream copies and follows one file for neatness and control.
 	// StreamSelect selects between "stdout.txt" and "stderr.txt".
 	Stream(ctx context.Context, in *StreamRequest, opts ...grpc.CallOption) (Jobber_StreamClient, error)
+	Version(ctx context.Context, in *VersionRequest, opts ...grpc.CallOption) (*VersionResponse, error)
 }
 
 type jobberClient struct {
@@ -108,6 +110,15 @@ func (x *jobberStreamClient) Recv() (*StreamResponse, error) {
 	return m, nil
 }
 
+func (c *jobberClient) Version(ctx context.Context, in *VersionRequest, opts ...grpc.CallOption) (*VersionResponse, error) {
+	out := new(VersionResponse)
+	err := c.cc.Invoke(ctx, Jobber_Version_FullMethodName, in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // JobberServer is the server API for Jobber service.
 // All implementations must embed UnimplementedJobberServer
 // for forward compatibility
@@ -122,6 +133,7 @@ type JobberServer interface {
 	// Stream copies and follows one file for neatness and control.
 	// StreamSelect selects between "stdout.txt" and "stderr.txt".
 	Stream(*StreamRequest, Jobber_StreamServer) error
+	Version(context.Context, *VersionRequest) (*VersionResponse, error)
 	mustEmbedUnimplementedJobberServer()
 }
 
@@ -140,6 +152,9 @@ func (UnimplementedJobberServer) Status(context.Context, *StatusRequest) (*Statu
 }
 func (UnimplementedJobberServer) Stream(*StreamRequest, Jobber_StreamServer) error {
 	return status.Errorf(codes.Unimplemented, "method Stream not implemented")
+}
+func (UnimplementedJobberServer) Version(context.Context, *VersionRequest) (*VersionResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method Version not implemented")
 }
 func (UnimplementedJobberServer) mustEmbedUnimplementedJobberServer() {}
 
@@ -229,6 +244,24 @@ func (x *jobberStreamServer) Send(m *StreamResponse) error {
 	return x.ServerStream.SendMsg(m)
 }
 
+func _Jobber_Version_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(VersionRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(JobberServer).Version(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Jobber_Version_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(JobberServer).Version(ctx, req.(*VersionRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // Jobber_ServiceDesc is the grpc.ServiceDesc for Jobber service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -247,6 +280,10 @@ var Jobber_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "Status",
 			Handler:    _Jobber_Status_Handler,
+		},
+		{
+			MethodName: "Version",
+			Handler:    _Jobber_Version_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{

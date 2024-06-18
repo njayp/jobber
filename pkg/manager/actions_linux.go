@@ -14,7 +14,7 @@ import (
 )
 
 // Start calls Spawn in a new process. It does not wait for the process to start.
-func Start(req *pb.StartRequest) (*pb.StartResponse, error) {
+func (*Manager) Start(req *pb.StartRequest) (*pb.StartResponse, error) {
 	exe, err := os.Executable()
 	if err != nil {
 		return nil, err
@@ -36,7 +36,7 @@ func Start(req *pb.StartRequest) (*pb.StartResponse, error) {
 }
 
 // Stop kills job with id. It does not wait for the job to exit.
-func Stop(req *pb.StopRequest) (*pb.StopResponse, error) {
+func (*Manager) Stop(req *pb.StopRequest) (*pb.StopResponse, error) {
 	path := filepath.Join(userCGPath, req.Id)
 	cg, err := cgroups.LoadCGroup(path)
 	if err != nil {
@@ -52,7 +52,7 @@ func Stop(req *pb.StopRequest) (*pb.StopResponse, error) {
 }
 
 // Status of job with id
-func Status(req *pb.StatusRequest) (*pb.StatusResponse, error) {
+func (*Manager) Status(req *pb.StatusRequest) (*pb.StatusResponse, error) {
 	path := filepath.Join(userCGPath, req.Id)
 	cg, err := cgroups.LoadCGroup(path)
 	if err != nil {
@@ -80,7 +80,7 @@ func Status(req *pb.StatusRequest) (*pb.StatusResponse, error) {
 }
 
 // Stream streams "stdout.txt" or "stderr.txt" until ctx is cancelled
-func Stream(ctx context.Context, req *pb.StreamRequest, w io.Writer) error {
+func (*Manager) Stream(ctx context.Context, req *pb.StreamRequest, w io.Writer) error {
 	path := outFilePath(req.Id, req.StreamSelect)
 	return copyFollow(ctx, path, w)
 }
