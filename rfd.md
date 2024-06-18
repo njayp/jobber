@@ -39,7 +39,7 @@ The manager uses cgroups v2. To keep its environment consistent, testing and run
 usage | description | notes |
 |-|-|-|
 |`start [flags]`|main command, starts the manager|
-|`spawn [flags] <cmd> [<cmd args...>]`|starts a child process in a target cgroup | started as a child process by the manager. target cgroup is specified with flags
+|`spawn [flags] <id> <cmd> [<cmd args...>]`|starts a child process in a target cgroup | started as a child process by the manager |
 
 #### CGroups
 
@@ -75,13 +75,13 @@ This cgroups hierarchy provides fine-grained control at all levels. For example,
 | io read and write maximums (1MB/s) | io.max | 1:0 wbps=1048576 rbps=1048576 |
 | maximum number of processes (100) | pids.max | 100 |
 
-The manager can kill all processes in a cgroup by writing `1` to `cgroup.freeze`. The manager can get the status of a job by reading `cgroup.events`; `populated` shows whether there are processes running, and `frozen` shows whether those processes are frozen.
+The manager can kill all processes in a cgroup by writing `1` to `cgroup.kill`. The manager can get the status of a job by reading `cgroup.procs`; the presence of pids indicates that the process, or one of its children, is still running. If there are no pids, the manager checks `/tmp/jobber/<user>/<job>/exitcode.txt` for exit code `-1` to determine whether the process was killed or not.
 
 #### Process
 
 In order to protect the system files from jobs, job processes are run as a linux user. This is accomplished by modifying processes before they are started using `syscall.SysProcAttr`. For this iteration, the only valid user is `nobody`, but this could be expanded in the future for security and convenience.
 
-To start a process in the appropriate cgroup, `jobber` will call itself with the subcommand `spawn`. This child process moves itself to the target cgroup and starts the job process so that the job process is automatically added to the target cgroup. The stdout of the job process is stored in a file at `/tmp/jobber/<user>/<job>/out.txt`, and the stderr at `/tmp/jobber/<user>/<job>/err.txt`. The server monitors the stderr of its child process for errors.
+To start a process in the appropriate cgroup, `jobber` will call itself with the subcommand `spawn`. This child process moves itself to the target cgroup and starts the job process so that the job process is automatically added to the target cgroup. The stdout of the job process is stored in a file at `/tmp/jobber/<user>/<job>/stdout.txt`, the stderr at `/tmp/jobber/<user>/<job>/stderr.txt`, and the exit code at `/tmp/jobber/<user>/<job>/exitcode.txt`. The server monitors the stderr of its child process for errors.
 
 ### API
 
@@ -142,15 +142,13 @@ service Jobber {
     // IDEA watching functionality should be added to this rpc.
     rpc Status(StatusRequest) returns (StatusResponse);
     // Stream copies and follows one file for neatness and control. 
-    // It is currently called twice, once for "out.txt", and once for "err.txt". 
-    // Reusing the same client will reuse the same connection for both calls. 
+    // StreamSelect selects between "stdout.txt" and "stderr.txt". 
     rpc Stream(StreamRequest) returns (stream StreamResponse);
 }
 
 message StartRequest {
     // used in exec.Cmd
-    string cmd = 1;
-    repeated string args = 2;
+    repeated string cmdString = 1;
 }
 
 message StartResponse {
@@ -173,7 +171,7 @@ message StatusResponse {
 
 message StreamRequest {
     string id = 1;
-    StreamIndicator streamIndicator = 2;
+    StreamSelect streamSelect = 2;
 }
 
 message StreamResponse {
@@ -182,18 +180,17 @@ message StreamResponse {
 
 ////
 
-// If State is unknown, the rpc throws error
 enum State {
     State_Unspecified = 0;
     Running = 1;
     Exited = 2;
-    Frozen = 3;
+    Killed = 3;
 }
 
-enum StreamIndicator {
-    StreamIndicator_Unspecified = 0;
-    StdOut = 1;
-    StdErr = 2;
+enum StreamSelect {
+    StreamSelect_Unspecified = 0;
+    Stdout = 1;
+    Stderr = 2;
 }
 ```
 

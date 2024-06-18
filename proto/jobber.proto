@@ -1,0 +1,70 @@
+syntax = "proto3";
+package pb;
+option go_package = "./pb";
+
+service Jobber {
+    // Start throws error if process does not start.
+    rpc Start(StartRequest) returns (StartResponse);
+    // Stop does not wait for the cgroup to exit. Status should be used 
+    // to check whether a process has exited.
+    rpc Stop(StopRequest) returns (StopResponse);
+    // IDEA watching functionality should be added to this rpc.
+    rpc Status(StatusRequest) returns (StatusResponse);
+    // Stream copies and follows one file for neatness and control. 
+    // StreamSelect selects between "stdout.txt" and "stderr.txt". 
+    rpc Stream(StreamRequest) returns (stream StreamResponse);
+    rpc Version(VersionRequest) returns (VersionResponse);
+}
+
+message StartRequest {
+    // used in exec.Cmd
+    repeated string cmdString = 1;
+}
+
+message StartResponse {
+    string id = 1;
+}
+
+message StopRequest {
+    string id = 1;
+}
+
+message StopResponse {}
+
+message StatusRequest {
+    string id = 1;
+}
+
+message StatusResponse {
+    State state = 1;
+}
+
+message StreamRequest {
+    string id = 1;
+    StreamSelect streamSelect = 2;
+}
+
+message StreamResponse {
+    bytes data = 1;
+}
+
+message VersionRequest {}
+
+message VersionResponse {
+    string version = 1;
+}
+
+////
+
+enum State {
+    State_Unspecified = 0;
+    Running = 1;
+    Exited = 2;
+    Killed = 3;
+}
+
+enum StreamSelect {
+    StreamSelect_Unspecified = 0;
+    Stdout = 1;
+    Stderr = 2;
+}
